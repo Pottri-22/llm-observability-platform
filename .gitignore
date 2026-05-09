@@ -1,22 +1,39 @@
 # ========================
-# Python (backend)
+# Python
 # ========================
-backend/venv/
-backend/__pycache__/
-backend/*.pyc
-backend/.env
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.coverage
+htmlcov/
+.python-version
 
 # ========================
-# Node (frontend)
+# Node
 # ========================
-frontend/node_modules/
-frontend/dist/
+node_modules/
+.next/
+out/
+dist/
+*.tsbuildinfo
 
 # ========================
-# Environment files
+# Environment / secrets
 # ========================
 .env
+.env.local
+.env.*.local
 *.env
+!.env.example
 
 # ========================
 # Logs
@@ -24,7 +41,7 @@ frontend/dist/
 *.log
 
 # ========================
-# OS files
+# OS
 # ========================
 .DS_Store
 Thumbs.db
@@ -34,13 +51,13 @@ Thumbs.db
 # ========================
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
 
 # ========================
-# Docker
+# Build / Cache
 # ========================
-*.env
-
-# ========================
-# Cache
-# ========================
+build/
 .cache/
+*.pid

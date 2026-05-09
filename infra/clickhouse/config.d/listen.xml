@@ -1,0 +1,7 @@
+<clickhouse>
+    <!-- Override the default `::` (dual-stack IPv6) listen with IPv4-only.
+         Docker Desktop on Windows/WSL2 disables IPv6 in container netns;
+         binding to `::` fails entirely with "Address family for hostname not supported"
+         and the server ends up listening on nothing. -->
+    <listen_host replace="replace">0.0.0.0</listen_host>
+</clickhouse>
