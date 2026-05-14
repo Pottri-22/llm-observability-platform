@@ -1,0 +1,31 @@
+# Week 0 · Block 7 — kind cluster config, ingress-ready.
+#
+# A default `kind create cluster` gives you a working cluster but NO way for
+# host traffic to reach an Ingress. Two things make ingress work:
+#
+#   1. node-labels: ingress-ready=true   → the ingress-nginx "kind" manifest
+#      schedules its controller onto a node carrying this label.
+#   2. extraPortMappings 80/443          → forwards the host's :80/:443 into
+#      the control-plane node's container, so http://localhost hits the
+#      ingress controller's NodePort.
+#
+# Without these, `kubectl apply` of an Ingress succeeds but curl localhost
+# never reaches the pod.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: aegis-block7
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    extraPortMappings:
+      - containerPort: 80
+        hostPort: 80
+        protocol: TCP
+      - containerPort: 443
+        hostPort: 443
+        protocol: TCP

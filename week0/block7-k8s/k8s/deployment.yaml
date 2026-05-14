@@ -1,0 +1,63 @@
+# Week 0 · Block 7 — raw Deployment for hello-aegis.
+# This is the "do it by hand" version; the Helm chart later templates it.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello-aegis
+  labels:
+    app: hello-aegis
+spec:
+  replicas: 2 # two pods → proves the Service load-balances across them
+  selector:
+    matchLabels:
+      app: hello-aegis
+  template:
+    metadata:
+      labels:
+        app: hello-aegis # MUST match spec.selector.matchLabels above
+    spec:
+      containers:
+        - name: hello-aegis
+          image: hello-aegis:0.1.0
+          # The image was `kind load`-ed onto the node, not pushed to a
+          # registry. imagePullPolicy: Always would make the kubelet try to
+          # pull `hello-aegis:0.1.0` from Docker Hub and ErrImagePull.
+          # IfNotPresent uses the already-loaded local image.
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: RELEASE_NAME
+              value: "raw-manifests" # the Helm deploy will set this differently
+          # readiness gates traffic: the pod is kept out of the Service
+          # endpoints until /healthz passes.
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          # liveness restarts a wedged pod: if /healthz stops answering,
+          # the kubelet kills and recreates the container.
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          # requests = what the scheduler reserves; limits = the hard ceiling.
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+          # Defense in depth — the image already runs as uid 1000, but the
+          # cluster enforces it too.
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]

@@ -1,0 +1,15 @@
+# Week 0 · Block 7 — templated Service.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "hello-aegis.fullname" . }}
+  labels:
+    {{- include "hello-aegis.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "hello-aegis.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.targetPort }}

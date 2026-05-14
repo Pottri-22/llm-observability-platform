@@ -1,0 +1,25 @@
+{{- if .Values.ingress.enabled }}
+# Week 0 · Block 7 — templated Ingress.
+# Guarded by the ingress.enabled value: a guarded template renders to nothing
+# when the value is false, so one chart serves both "exposed" and
+# "internal-only" environments. The if-guard leads this file so it does not
+# chomp these comments onto apiVersion — see serviceaccount.yaml.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "hello-aegis.fullname" . }}
+  labels:
+    {{- include "hello-aegis.labels" . | nindent 4 }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - http:
+        paths:
+          - path: {{ .Values.ingress.path }}
+            pathType: {{ .Values.ingress.pathType }}
+            backend:
+              service:
+                name: {{ include "hello-aegis.fullname" . }}
+                port:
+                  number: {{ .Values.service.port }}
+{{- end }}

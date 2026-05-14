@@ -1,0 +1,10 @@
+# Week 0 · Block 7 — minimal Helm chart for the hello-aegis FastAPI app.
+apiVersion: v2
+name: hello-aegis
+description: Week 0 Block 7 refresher — the hello-aegis app, templated.
+type: application
+# version  = the CHART version (bumped when templates change).
+# appVersion = the default app image tag (bumped when the app changes).
+# Keeping them distinct is the whole reason Helm has two fields.
+version: 0.1.0
+appVersion: "0.1.0"

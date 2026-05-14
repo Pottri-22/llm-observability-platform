@@ -1,0 +1,21 @@
+# Week 0 · Block 7 — raw Ingress for hello-aegis.
+# Routes host HTTP traffic (kind forwards localhost:80 → ingress controller)
+# to the hello-aegis Service. Needs the ingress-nginx controller running.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hello-aegis
+spec:
+  ingressClassName: nginx # which controller handles this Ingress
+  rules:
+    # No `host:` → this rule matches any Host header, so plain
+    # `curl http://localhost/` works without /etc/hosts entries.
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: hello-aegis
+                port:
+                  number: 80 # must match the Service's `port`, not targetPort

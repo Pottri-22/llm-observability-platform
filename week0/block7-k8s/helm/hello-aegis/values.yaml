@@ -1,0 +1,45 @@
+# Week 0 · Block 7 — default values. Everything the templates parameterise.
+# Override per-environment with `-f values-prod.yaml` or `--set key=value`.
+
+replicaCount: 2
+
+image:
+  repository: hello-aegis
+  tag: "0.1.0"
+  # The image is `kind load`-ed onto the node, not in a registry — so the
+  # kubelet must NOT try to pull it. IfNotPresent uses the local copy.
+  pullPolicy: IfNotPresent
+
+# Leave empty to derive names from the release + chart name (see _helpers.tpl).
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # A dedicated, least-privilege ServiceAccount instead of the namespace
+  # "default" SA — matches the real Aegis chart (README §10).
+  create: true
+  name: ""
+
+service:
+  type: ClusterIP
+  port: 80 # Service port (what the Ingress targets)
+  targetPort: 8000 # containerPort uvicorn listens on
+
+ingress:
+  enabled: true # set false to deploy without host exposure
+  className: nginx
+  path: /
+  pathType: Prefix
+
+# Probe path. NOTE: kept as /healthz because the kubelet probes hit the pod
+# DIRECTLY (not through the ingress), so ingress-nginx's reserved /healthz
+# location does not interfere here.
+probePath: /healthz
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 250m
+    memory: 128Mi

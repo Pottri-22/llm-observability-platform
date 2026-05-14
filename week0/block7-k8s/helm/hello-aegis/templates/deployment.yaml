@@ -1,0 +1,54 @@
+# Week 0 · Block 7 — templated Deployment.
+# Compare against ../../k8s/deployment.yaml: same shape, but every value that
+# would change per-environment is now a templated .Values reference.
+# (Note: Helm parses template actions even inside YAML comments, so a comment
+#  can't contain a literal opening-brace pair followed by invalid syntax.)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "hello-aegis.fullname" . }}
+  labels:
+    {{- include "hello-aegis.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "hello-aegis.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "hello-aegis.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "hello-aegis.serviceAccountName" . }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.service.targetPort }}
+          env:
+            # The payoff of the whole block: this surfaces the Helm RELEASE
+            # NAME at runtime, so `curl` output proves Helm deployed the pod
+            # — distinct from the raw-manifest deploy's "raw-manifests".
+            - name: RELEASE_NAME
+              value: {{ .Release.Name | quote }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probePath }}
+              port: {{ .Values.service.targetPort }}
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probePath }}
+              port: {{ .Values.service.targetPort }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]

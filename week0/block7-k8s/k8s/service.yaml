@@ -1,0 +1,16 @@
+# Week 0 · Block 7 — raw Service for hello-aegis.
+# A stable virtual IP + DNS name in front of the (churning) set of pods.
+apiVersion: v1
+kind: Service
+metadata:
+  name: hello-aegis
+  labels:
+    app: hello-aegis
+spec:
+  type: ClusterIP # internal-only; the Ingress is what exposes it to the host
+  selector:
+    app: hello-aegis # picks up every pod carrying this label — that's the wiring
+  ports:
+    - name: http
+      port: 80 # the port the Service listens on (what the Ingress targets)
+      targetPort: 8000 # the containerPort the traffic is forwarded to

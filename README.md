@@ -108,7 +108,7 @@ flowchart LR
         PG[(Postgres<br/>orgs, projects,<br/>prompts, audit log)]
         CELERY[Celery Workers]
         BEAT[Celery Beat<br/>nightly drift / regression]
-        DASH[Next.js 14 Dashboard]
+        DASH[Next.js 16 Dashboard]
         OTEL[OpenTelemetry<br/>self-instrument]
 
         API --> CH
@@ -156,7 +156,7 @@ flowchart LR
 | **Async workers** | Celery + Celery Beat | Eval jobs, nightly drift, regression detection |
 | **LLM gateway** | **LiteLLM** | One client interface for OpenAI / Anthropic / Groq / Ollama — no vendor lock-in |
 | **Eval libraries** | RAGAS, BERTScore, sentence-transformers | RAG metrics, semantic similarity, embeddings |
-| **Frontend** | **Next.js 14 (App Router)** + Tailwind + shadcn/ui + TanStack Table + Recharts + Monaco diff | Trace explorer, eval explorer, prompt registry diff UI, live SSE stream |
+| **Frontend** | **Next.js 16 (App Router)** + Tailwind + shadcn/ui + TanStack Table + Recharts + Monaco diff | Trace explorer, eval explorer, prompt registry diff UI, live SSE stream |
 | **Auth** | Supabase Auth (magic link) → JWT | Free-tier auth without rolling your own |
 | **SDKs** | `aegis-sdk` (PyPI) + `@aegis/sdk` (npm) | Reliability-first: timeout, retry, in-memory buffer, circuit breaker |
 | **Observability (dogfood)** | OpenTelemetry → Prometheus + Grafana | Aegis traces itself in its own dashboard |
@@ -557,7 +557,7 @@ Pre-build learning to de-risk the cold-start tax on AI/ML and Cloud. **Hard rule
 | 3 | 3 | OpenAI SDK monkey-patch / instrumentation pattern | `instrument_openai()` decorator captures prompt + response + cost on every call without changing call sites |
 | 4 | 3 | ClickHouse `MergeTree` — partitioning, ordering, indexes, `clickhouse-client` ergonomics | Local ClickHouse container; insert 100 k synthetic spans; analytic `SELECT … GROUP BY` returns in < 100 ms |
 | 5 | 3 | `sentence-transformers/all-MiniLM-L6-v2` + cosine drift math | Python script computes embedding centroid for 100 prompts and measures cosine drift vs a second batch |
-| 6 | 1.5 | Next.js 14 App Router + shadcn/ui refresher | `npx create-next-app`, add 3 shadcn components (Card, Table, Button), one Server Action working |
+| 6 | 1.5 | Next.js 16 App Router + shadcn/ui refresher | `npx create-next-app`, add 3 shadcn components (Card, Table, Button), one Server Action working |
 | 7 | 6.5 | Kind cluster + raw K8s manifests + minimal Helm chart | `kind create cluster` running a hello-FastAPI Deployment + Service + Ingress, then re-deployed via a 5-template Helm chart |
 
 **Total: ~22 hrs.** Skip blocks at your own risk — the cold-start tax compounds. Skipping block 4 (ClickHouse) burns 4 hrs of v0.1 build time on schema design instead of 1; skipping block 7 blocks v0.4 entirely.
