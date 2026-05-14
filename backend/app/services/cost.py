@@ -27,8 +27,10 @@ RATES: dict[str, ModelRate] = {
     "claude-opus-4-7": ModelRate(input_per_mtok=15.00, output_per_mtok=75.00),
     "claude-sonnet-4-6": ModelRate(input_per_mtok=3.00, output_per_mtok=15.00),
     "claude-haiku-4-5": ModelRate(input_per_mtok=1.00, output_per_mtok=5.00),
-    # Groq (free tier during sprint — modeled as zero so it doesn't pollute cost charts)
-    "groq/llama-3.1-70b-versatile": ModelRate(input_per_mtok=0.0, output_per_mtok=0.0),
+    # Groq (free tier during sprint — modeled as zero so it doesn't pollute cost charts).
+    # Groq decommissions models aggressively; verify against `/v1/models` at the
+    # start of each milestone (last verified 2026-05-09).
+    "groq/llama-3.3-70b-versatile": ModelRate(input_per_mtok=0.0, output_per_mtok=0.0),
     "groq/llama-3.1-8b-instant": ModelRate(input_per_mtok=0.0, output_per_mtok=0.0),
 }
 
