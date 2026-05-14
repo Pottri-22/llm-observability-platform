@@ -7,6 +7,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.schemas.common import PaginatedMeta
+
 
 class TraceIngest(BaseModel):
     """Single trace event uploaded by an SDK."""
@@ -60,3 +62,47 @@ class TraceAccepted(BaseModel):
 
 class BatchAccepted(BaseModel):
     accepted: list[TraceAccepted]
+
+
+class TraceListItem(BaseModel):
+    """One row in the dashboard trace list.
+
+    Deliberately omits the full `prompt` / `completion` (each can be ~200 KB) — a 50-row
+    list page would otherwise ship megabytes the list view never renders. The dashboard
+    fetches full bodies lazily via the detail endpoint when a row is clicked.
+    """
+
+    trace_id: str
+    ts: datetime
+    model: str
+    tokens_in: int
+    tokens_out: int
+    cost_usd: float
+    latency_ms: int
+    prompt_preview: str = Field(description="First ~120 chars of the prompt, truncated server-side.")
+
+
+class TraceDetail(BaseModel):
+    """A single trace, fully expanded — backs the trace-detail view."""
+
+    trace_id: str
+    org_id: str
+    project_id: str
+    ts: datetime
+    model: str
+    prompt: str
+    completion: str
+    tokens_in: int
+    tokens_out: int
+    cost_usd: float
+    latency_ms: int
+    metadata: dict[str, Any]
+    inserted_at: datetime
+
+
+class TraceListResponse(BaseModel):
+    """Paginated trace list — rows plus the meta the dashboard needs to render
+    "showing 1–50 of 1,284" and wire up next/prev."""
+
+    traces: list[TraceListItem]
+    meta: PaginatedMeta
