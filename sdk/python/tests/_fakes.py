@@ -119,6 +119,28 @@ class FakeChat:
         self.completions = completions
 
 
+class FakeTransport:
+    """Stand-in for `Transport` — records sent batches, never touches the network.
+
+    `succeed` controls the return of `send_batch`, so tests can exercise the facade's
+    behaviour on a failing send (e.g. early-stop in `_flush_once`).
+    """
+
+    def __init__(self, succeed: bool = True) -> None:
+        self.batches: list[list[Any]] = []
+        self.sent: list[Any] = []
+        self.succeed = succeed
+        self.closed = False
+
+    def send_batch(self, events: list[Any]) -> bool:
+        self.batches.append(list(events))
+        self.sent.extend(events)
+        return self.succeed
+
+    def close(self) -> None:
+        self.closed = True
+
+
 class FakeClient:
     """Stand-in for `openai.OpenAI` / `openai.AsyncOpenAI`.
 
