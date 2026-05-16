@@ -45,6 +45,15 @@ class Settings(BaseSettings):
     trace_batch_size: int = 100
     trace_batch_flush_ms: int = 500
 
+    # LLM-as-Judge (v0.2 eval engine). Defaults point at Groq's free tier so
+    # the eval engine stays $0 during the sprint. v0.3 swaps to LiteLLM and
+    # supports paid providers without touching this code.
+    judge_model: str = "llama-3.3-70b-versatile"
+    judge_base_url: str = "https://api.groq.com/openai/v1"
+    groq_api_key: str = ""  # populated from the worker container's env
+    judge_timeout_s: float = 15.0  # per attempt; one judge call should be ~1-3s
+    judge_runs: int = 3  # G-Eval median-of-N stabilization; README §6.4 spec
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
