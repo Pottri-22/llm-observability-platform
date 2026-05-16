@@ -82,6 +82,27 @@ class TraceListItem(BaseModel):
     prompt_preview: str = Field(description="First ~120 chars of the prompt, truncated server-side.")
 
 
+class EvaluationRecord(BaseModel):
+    """One row from the `evaluations` table — what an evaluator produced for a trace.
+
+    One trace can have many evaluations: re-runs, plus future v0.2 evaluators
+    (RAGAS, BERTScore, PII) each adding their own row. `scores` keys vary per
+    evaluator — Judge emits `{accuracy, completeness, safety}`; PII will emit
+    `{pii_score}`; etc.
+    """
+
+    eval_id: str
+    evaluator: str
+    scores: dict[str, float]
+    reasoning: str
+    judge_model: str
+    latency_ms: int
+    cost_usd: float
+    status: str  # "ok" | "error"
+    error: str
+    created_at: datetime
+
+
 class TraceDetail(BaseModel):
     """A single trace, fully expanded — backs the trace-detail view."""
 
@@ -98,6 +119,9 @@ class TraceDetail(BaseModel):
     latency_ms: int
     metadata: dict[str, Any]
     inserted_at: datetime
+    # Populated by the read endpoint, not by trace_reader.get_trace itself —
+    # default empty so an unsurfaced caller still gets a valid response.
+    evaluations: list[EvaluationRecord] = Field(default_factory=list)
 
 
 class TraceListResponse(BaseModel):

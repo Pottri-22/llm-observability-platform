@@ -20,7 +20,11 @@ from app.schemas.trace import (
     TraceIngest,
     TraceListResponse,
 )
-from app.services.trace_reader import get_trace, list_traces
+from app.services.trace_reader import (
+    get_trace,
+    list_evaluations_for_trace,
+    list_traces,
+)
 from app.services.trace_writer import write_traces
 from app.workers.tasks import evaluate_trace
 
@@ -146,4 +150,11 @@ async def read_trace(trace_id: str, tenant: TenantDep) -> TraceDetail:
     detail = await get_trace(project_id=tenant.project_id, trace_id=trace_id)
     if detail is None:
         raise NotFoundError(f"No trace {trace_id!r} in this project.")
+    # Attach evals — separate query, same tenant scope. Two trips instead of a
+    # join because the eval row count is small (single digits) per trace, and
+    # keeping it separate means the listing endpoint doesn't accidentally pay
+    # the cost when it shouldn't.
+    detail.evaluations = await list_evaluations_for_trace(
+        project_id=tenant.project_id, trace_id=trace_id
+    )
     return detail

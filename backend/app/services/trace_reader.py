@@ -26,7 +26,12 @@ import structlog
 
 from app.db.clickhouse import get_client
 from app.schemas.common import PaginatedMeta
-from app.schemas.trace import TraceDetail, TraceListItem, TraceListResponse
+from app.schemas.trace import (
+    EvaluationRecord,
+    TraceDetail,
+    TraceListItem,
+    TraceListResponse,
+)
 
 log = structlog.get_logger()
 
@@ -41,6 +46,10 @@ _LIST_COLUMNS = (
 _DETAIL_COLUMNS = (
     "trace_id, org_id, project_id, ts, model, prompt, completion, "
     "tokens_in, tokens_out, cost_usd, latency_ms, metadata, inserted_at"
+)
+_EVAL_COLUMNS = (
+    "eval_id, evaluator, scores, reasoning, judge_model, "
+    "latency_ms, cost_usd, status, error, created_at"
 )
 
 
@@ -173,3 +182,44 @@ async def get_trace(*, project_id: str, trace_id: str) -> TraceDetail | None:
         metadata=json.loads(r[11]) if r[11] else {},
         inserted_at=r[12],
     )
+
+
+async def list_evaluations_for_trace(
+    *, project_id: str, trace_id: str
+) -> list[EvaluationRecord]:
+    """All evaluator rows for one trace, newest first. Project-scoped.
+
+    A trace can have multiple eval rows — re-runs, and (later in v0.2) one row
+    per evaluator (Judge, RAGAS, BERTScore, PII). The dashboard renders them
+    grouped by `evaluator`, so we hand back the whole set in one go rather than
+    making it filter."""
+    client = get_client()
+    sql = (
+        f"SELECT {_EVAL_COLUMNS} FROM evaluations "
+        "WHERE project_id = {project_id:String} AND trace_id = {trace_id:String} "
+        "ORDER BY created_at DESC"
+    )
+    params = {"project_id": project_id, "trace_id": trace_id}
+
+    def _run() -> list[tuple[object, ...]]:
+        return client.query(sql, parameters=params).result_rows
+
+    rows = await asyncio.to_thread(_run)
+    return [
+        EvaluationRecord(
+            eval_id=r[0],
+            evaluator=r[1],
+            # ClickHouse Map(String, Float64) is returned by clickhouse-connect
+            # as a Python dict; coerce defensively so a future driver change
+            # that hands back tuples doesn't break us.
+            scores=dict(r[2]),
+            reasoning=r[3],
+            judge_model=r[4],
+            latency_ms=r[5],
+            cost_usd=r[6],
+            status=r[7],
+            error=r[8],
+            created_at=r[9],
+        )
+        for r in rows
+    ]

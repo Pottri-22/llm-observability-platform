@@ -28,6 +28,22 @@ export type TraceListResponse = {
   meta: PaginatedMeta;
 };
 
+/** One row from the `evaluations` table — backend `EvaluationRecord`.
+ *  Score keys vary per evaluator: Judge emits `{accuracy, completeness, safety}`;
+ *  PII will emit `{pii_score}`; etc. The detail page renders whatever's there. */
+export type EvaluationRecord = {
+  eval_id: string;
+  evaluator: string;
+  scores: Record<string, number>;
+  reasoning: string;
+  judge_model: string;
+  latency_ms: number;
+  cost_usd: number;
+  status: string; // "ok" | "error"
+  error: string;
+  created_at: string;
+};
+
 /** Response of `GET /v1/traces/{id}` — backend `TraceDetail`. */
 export type TraceDetail = {
   trace_id: string;
@@ -43,6 +59,7 @@ export type TraceDetail = {
   latency_ms: number;
   metadata: Record<string, unknown>;
   inserted_at: string;
+  evaluations: EvaluationRecord[];
 };
 
 /** Error envelope — backend `ErrorResponse` (`{ error: { code, message } }`). */

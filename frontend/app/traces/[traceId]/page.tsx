@@ -23,9 +23,11 @@ import { getTrace } from "@/lib/backend";
 import {
   formatCost,
   formatLatency,
+  formatRelativeTime,
   formatTimestamp,
 } from "@/lib/format";
 import { requireApiKey } from "@/lib/session";
+import type { EvaluationRecord } from "@/lib/types";
 
 type Message = { role: string; content: string };
 
@@ -133,6 +135,30 @@ export default async function TraceDetailPage({
         </CardContent>
       </Card>
 
+      {/* Evaluations — automated scores from the eval engine. Placed right
+          after Summary because "is this response good?" is the next question
+          after "what was sent and what came back?". */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Evaluations</CardTitle>
+          <CardDescription>
+            Automated scoring runs against this trace. The judge runs asynchronously —
+            refresh in a few seconds if you just POSTed.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {trace.evaluations.length === 0 ? (
+            <p className="text-sm text-muted-foreground italic">
+              No evaluations yet for this trace.
+            </p>
+          ) : (
+            trace.evaluations.map((evaluation) => (
+              <EvaluationItem key={evaluation.eval_id} evaluation={evaluation} />
+            ))
+          )}
+        </CardContent>
+      </Card>
+
       {/* Messages: render parsed conversation when the SDK was the source;
           otherwise fall back to the raw prompt string. */}
       <Card>
@@ -207,6 +233,72 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div>
       <dt className="text-xs uppercase tracking-wide text-muted-foreground">{label}</dt>
       <dd className="mt-1">{children}</dd>
+    </div>
+  );
+}
+
+/** One eval row from the backend, rendered as scores + reasoning + footer. */
+function EvaluationItem({ evaluation }: { evaluation: EvaluationRecord }) {
+  const isError = evaluation.status === "error";
+  return (
+    <div className="space-y-3 border-l-2 border-muted pl-4">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <Badge variant="outline" className="font-mono">
+          {evaluation.evaluator}
+        </Badge>
+        <Badge variant={isError ? "destructive" : "secondary"}>
+          {evaluation.status}
+        </Badge>
+        <span className="text-xs text-muted-foreground">
+          {formatRelativeTime(evaluation.created_at)}
+        </span>
+      </div>
+
+      {isError ? (
+        <p className="text-sm text-red-600 dark:text-red-400">
+          {evaluation.error || "Evaluator failed without a message."}
+        </p>
+      ) : (
+        <>
+          {/* Scores as labeled mini-bars. Keys aren't known at compile time —
+              Judge emits accuracy/completeness/safety; PII will emit pii_score;
+              the loop renders whatever's there. */}
+          <div className="grid gap-2 sm:grid-cols-3">
+            {Object.entries(evaluation.scores).map(([key, value]) => (
+              <ScoreBar key={key} label={key} value={value} />
+            ))}
+          </div>
+          {evaluation.reasoning ? (
+            <p className="text-sm text-muted-foreground italic">
+              “{evaluation.reasoning}”
+            </p>
+          ) : null}
+        </>
+      )}
+
+      <p className="text-xs text-muted-foreground">
+        {evaluation.judge_model ? `${evaluation.judge_model} · ` : ""}
+        {formatLatency(evaluation.latency_ms)} · {formatCost(evaluation.cost_usd)}
+      </p>
+    </div>
+  );
+}
+
+/** Color-coded 0-1 score with a horizontal bar. ≥0.8 green, ≥0.5 amber, else red.
+ *  Thresholds match common eval-tooling conventions (LangSmith, Langfuse). */
+function ScoreBar({ label, value }: { label: string; value: number }) {
+  const pct = Math.max(0, Math.min(1, value)) * 100;
+  const color =
+    value >= 0.8 ? "bg-emerald-500" : value >= 0.5 ? "bg-amber-500" : "bg-red-500";
+  return (
+    <div>
+      <div className="mb-1 flex justify-between text-xs">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="font-mono tabular-nums">{value.toFixed(2)}</span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-muted">
+        <div className={`h-full ${color}`} style={{ width: `${pct}%` }} />
+      </div>
     </div>
   );
 }
