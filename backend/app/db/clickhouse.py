@@ -80,3 +80,32 @@ PARTITION BY toYYYYMMDD(ts)
 ORDER BY (project_id, ts, trace_id)
 SETTINGS index_granularity = 8192
 """.strip()
+
+
+# Evaluations table — one row per evaluator run against one trace.
+# `scores` is a Map so each evaluator can carry its own dimensions without a schema
+# change: Judge → {accuracy, completeness, safety}; RAGAS → {faithfulness, answer_relevance,
+# context_recall}; PII → {pii_score}. ORDER BY leads with `(project_id, trace_id)` because
+# the dominant query is "evals for this trace" — tenant scope first, then the trace.
+EVALUATIONS_TABLE_DDL = """
+CREATE TABLE IF NOT EXISTS evaluations
+(
+    eval_id String,
+    trace_id String,
+    org_id String,
+    project_id String,
+    evaluator String,
+    scores Map(String, Float64),
+    reasoning String,
+    judge_model String,
+    latency_ms UInt32,
+    cost_usd Float64,
+    status String,
+    error String,
+    created_at DateTime64(3) DEFAULT now64()
+)
+ENGINE = MergeTree()
+PARTITION BY toYYYYMMDD(created_at)
+ORDER BY (project_id, trace_id, evaluator, created_at)
+SETTINGS index_granularity = 8192
+""".strip()

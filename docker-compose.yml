@@ -71,6 +71,35 @@ services:
       redis:
         condition: service_healthy
 
+  # Async eval worker. Same image as api, different entrypoint — Celery picks up
+  # eval_trace jobs from Redis and writes evaluations rows to ClickHouse. No port
+  # binding (it's queue-driven, not an HTTP service).
+  worker:
+    build: ./backend
+    command: ["celery", "-A", "app.workers.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+    environment:
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 8123
+      CLICKHOUSE_USER: aegis
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-aegis_dev_pw}
+      CLICKHOUSE_DATABASE: aegis
+      REDIS_URL: redis://redis:6379/0
+      LOG_LEVEL: INFO
+      ENV: dev
+      # Used by EVAL-B (LLM-as-Judge); read from the host .env at compose time
+      # so the key never gets committed to git.
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # The api's Dockerfile HEALTHCHECK probes :8000, which the worker doesn't
+    # serve — disable here so `docker compose ps` reflects worker liveness via
+    # the container's running state, not a perma-failing HTTP probe.
+    healthcheck:
+      disable: true
+
 volumes:
   postgres_data:
   clickhouse_data:

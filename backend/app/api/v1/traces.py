@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 from typing import Annotated
 
+import structlog
 from fastapi import APIRouter, Query, status
 
 from app.api.deps import TenantDep
@@ -20,6 +22,21 @@ from app.schemas.trace import (
 )
 from app.services.trace_reader import get_trace, list_traces
 from app.services.trace_writer import write_traces
+from app.workers.tasks import evaluate_trace
+
+log = structlog.get_logger()
+
+
+async def _enqueue_eval(trace_id: str, org_id: str, project_id: str) -> None:
+    """Enqueue one eval job. Best-effort — Redis failure must never fail the
+    trace POST. `.delay()` is a synchronous Redis call (~1 ms), so we hop it to
+    a thread to keep the FastAPI event loop responsive."""
+    try:
+        await asyncio.to_thread(
+            evaluate_trace.delay, trace_id, org_id, project_id
+        )
+    except Exception as exc:  # noqa: BLE001 — eval enqueue is best-effort
+        log.warning("eval.enqueue_failed", trace_id=trace_id, error=str(exc))
 
 router = APIRouter()
 
@@ -44,7 +61,10 @@ async def ingest_trace(payload: TraceIngest, tenant: TenantDep) -> TraceAccepted
     accepted = await write_traces(
         [payload], org_id=tenant.org_id, project_id=tenant.project_id
     )
-    return accepted[0]
+    result = accepted[0]
+    if not result.duplicate:
+        await _enqueue_eval(result.trace_id, tenant.org_id, tenant.project_id)
+    return result
 
 
 @router.post(
@@ -70,6 +90,10 @@ async def ingest_batch(payload: TraceBatch, tenant: TenantDep) -> BatchAccepted:
     accepted = await write_traces(
         fresh, org_id=tenant.org_id, project_id=tenant.project_id
     )
+    # Fan out one eval job per freshly-written trace. Duplicates skipped above
+    # already have an eval scheduled from the first write — don't re-enqueue.
+    for r in accepted:
+        await _enqueue_eval(r.trace_id, tenant.org_id, tenant.project_id)
     return BatchAccepted(accepted=[*accepted, *skipped])
 
 

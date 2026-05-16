@@ -11,7 +11,7 @@ import sys
 import clickhouse_connect
 
 from app.config import settings
-from app.db.clickhouse import TRACES_TABLE_DDL
+from app.db.clickhouse import EVALUATIONS_TABLE_DDL, TRACES_TABLE_DDL
 
 
 def main() -> int:
@@ -35,7 +35,9 @@ def main() -> int:
 
     print("Applying traces table DDL…")
     client.command(TRACES_TABLE_DDL)
-    print("OK — traces table ready.")
+    print("Applying evaluations table DDL…")
+    client.command(EVALUATIONS_TABLE_DDL)
+    print("OK — traces + evaluations tables ready.")
     return 0
 
 
