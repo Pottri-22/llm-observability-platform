@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security disclosure (private)
+    url: https://github.com/Pottri-22/llm-observability-platform/security/advisories/new
+    about: Please report security issues privately, never via a public issue.
+  - name: Roadmap & anti-scope
+    url: https://github.com/Pottri-22/llm-observability-platform#12-roadmap-versioned-shipping
+    about: Check which version a feature is planned for, and which features are deliberate "no"s.

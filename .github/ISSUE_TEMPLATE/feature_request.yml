@@ -1,0 +1,44 @@
+name: Feature request
+description: Suggest a capability, integration, or behaviour change.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing, please skim
+        [README §13 — anti-scope](https://github.com/Pottri-22/llm-observability-platform#13-whats-not-in-aegis-anti-scope).
+        Some asks are deliberate "no"s — those will be closed quickly with a
+        link to the reason. That's not personal; it's scoping discipline.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What can't you do today that you need to? Concrete user pain, not "would be nice".
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: At least one. Forces the design tradeoff to be visible.
+
+  - type: dropdown
+    id: domain
+    attributes:
+      label: Which area does this touch
+      options:
+        - AI/ML — SDK, evaluators, prompt router, drift, evals
+        - FSD — dashboard, SDKs, auth, onboarding
+        - Cloud / DevOps — Helm, K8s, CI, deploy
+        - Cross-cutting / other
+    validations:
+      required: true

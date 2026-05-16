@@ -1,0 +1,64 @@
+name: Bug report
+description: Something in Aegis isn't behaving as documented.
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing. Bugs caught early save a lot of pain.
+
+        **Not for security issues** — please report those privately via GitHub's
+        [security advisory](https://github.com/Pottri-22/llm-observability-platform/security/advisories/new),
+        not here.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Be specific. "POST /v1/traces returns 500 when metadata is over 10 KB" beats "doesn't work".
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: Smallest sequence of commands or code that triggers the bug. Redact API keys.
+      render: shell
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Aegis version / commit
+      placeholder: "v0.1 — or the commit SHA you're on"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: How are you running it
+      options:
+        - docker compose (local)
+        - Kubernetes / Helm
+        - pip / source install
+        - Hosted demo
+        - Other (note in logs section)
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or stack traces
+      description: "`docker compose logs <service> | tail -100` is usually enough. Redact API keys."
+      render: shell
