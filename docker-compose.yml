@@ -94,6 +94,14 @@ services:
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # The bertscore evaluator downloads sentence-transformers/all-MiniLM-L6-v2
+      # on first use. The worker runs as `aegis` with --no-create-home, so the
+      # default ~/.cache path is unwritable. Point HF / sentence-transformers
+      # caches at /tmp (always writable). Cache survives only for the
+      # container's lifetime — model re-downloads on each `docker compose up`;
+      # see the bertscore polish note in README for the volume-mount fix.
+      HF_HOME: /tmp/hf-cache
+      SENTENCE_TRANSFORMERS_HOME: /tmp/hf-cache
     depends_on:
       clickhouse:
         condition: service_healthy

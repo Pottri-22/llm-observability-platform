@@ -54,6 +54,12 @@ class Settings(BaseSettings):
     judge_timeout_s: float = 15.0  # per attempt; one judge call should be ~1-3s
     judge_runs: int = 3  # G-Eval median-of-N stabilization; README §6.4 spec
 
+    # RAGAS evaluator — DIY rubrics via the same LiteLLM gateway as the judge,
+    # one rubric call per metric per run. With three metrics on a full RAG
+    # trace this is 9 calls; free on Groq so it's fine, dial down via this
+    # knob if you switch to a paid provider. README §6.4 spec.
+    ragas_runs: int = 3
+
     # Provider API keys. LiteLLM reads these from the env at call time; we mirror
     # them here so app.config is the single source of truth and tests can inject.
     # Worker containers receive whichever are set in the host .env (see compose).
