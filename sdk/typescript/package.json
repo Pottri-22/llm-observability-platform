@@ -1,0 +1,56 @@
+{
+  "name": "@aegis/sdk",
+  "version": "0.1.0",
+  "description": "Drop-in tracing for LLM apps — auto-instruments OpenAI-compatible clients and ships traces to Aegis.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "llm",
+    "observability",
+    "tracing",
+    "openai",
+    "aegis"
+  ],
+  "license": "MIT",
+  "author": "Pottri Selvan R",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Pottri-22/llm-observability-platform.git",
+    "directory": "sdk/typescript"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "openai": "^6.38.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  },
+  "peerDependencies": {
+    "openai": "^6.38.0"
+  },
+  "peerDependenciesMeta": {
+    "openai": {
+      "optional": true
+    }
+  }
+}
