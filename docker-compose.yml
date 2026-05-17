@@ -86,9 +86,14 @@ services:
       REDIS_URL: redis://redis:6379/0
       LOG_LEVEL: INFO
       ENV: dev
-      # Used by EVAL-B (LLM-as-Judge); read from the host .env at compose time
-      # so the key never gets committed to git.
+      # Provider keys for the Judge / future evaluators going through LiteLLM.
+      # All read from the host .env so secrets never reach git; only the ones
+      # actually exported on the host are non-empty in the container. The
+      # default judge model is groq/llama-3.3-70b-versatile, so only
+      # GROQ_API_KEY is required day-to-day.
       GROQ_API_KEY: ${GROQ_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     depends_on:
       clickhouse:
         condition: service_healthy

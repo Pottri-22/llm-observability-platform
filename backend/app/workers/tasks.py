@@ -1,16 +1,16 @@
 """Celery task definitions.
 
-`evaluate_trace` is the only registered task today. It:
-  1. Fetches the trace's prompt + completion from ClickHouse (scoped to the
-     calling project — same isolation contract the read API enforces).
-  2. Calls the LLM-as-Judge evaluator (G-Eval), which dispatches `judge_runs`
-     parallel-feeling rubric calls and medians the scores.
-  3. Writes one `evaluations` row with the result.
+`evaluate_trace` is the only registered task. Inside, it fans out across every
+registered evaluator — currently `judge` and `pii` — and writes one row per
+evaluator into the `evaluations` table. Failures are isolated per-evaluator:
+one evaluator throwing must not skip the others, and one evaluator's transient
+failure must not duplicate work on retry.
 
-The task signature (`trace_id, org_id, project_id`) stays identical to EVAL-A's
-placeholder. Future v0.2 evaluators (RAGAS, BERTScore, PII) will fan out from
-inside this task, all writing into the same `evaluations` table with their own
-`evaluator` value — the ingest enqueue site doesn't change.
+Why no Celery-level retry: each evaluator handles its own resilience (Judge
+already does 3 internal rubric calls; PII is pure regex and can't fail). A task
+retry would re-run *every* evaluator and double-write the rows that already
+succeeded. So `evaluate_trace` always completes "successfully" from Celery's
+POV — each evaluator records its own success or failure in its eval row.
 """
 
 from __future__ import annotations
@@ -18,13 +18,14 @@ from __future__ import annotations
 import time
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 import clickhouse_connect
 import structlog
 from clickhouse_connect.driver.client import Client
 
 from app.config import settings
-from app.evaluators import judge
+from app.evaluators import judge, pii
 from app.services.cost import compute_cost_usd
 from app.workers.celery_app import celery_app
 
@@ -69,12 +70,8 @@ _EVAL_COLUMNS = [
 def _fetch_trace_content(
     trace_id: str, project_id: str
 ) -> tuple[str, str] | None:
-    """Read back the prompt + completion to score. Project-scoped — a task that
-    somehow received another tenant's trace_id reads zero rows.
-
-    Returns None if no row matches (the trace was never written, or this task
-    ran before the insert was visible — possible across replicas, though our
-    sync write rules it out for the single-node compose stack)."""
+    """Read prompt + completion to score. Project-scoped — a task that somehow
+    received another tenant's trace_id reads zero rows."""
     sql = (
         "SELECT prompt, completion FROM traces "
         "WHERE project_id = {pid:String} AND trace_id = {tid:String} LIMIT 1"
@@ -99,8 +96,7 @@ def _insert_eval_row(
     status: str,
     error: str,
 ) -> None:
-    """One INSERT row, columns in the order `_EVAL_COLUMNS` declares."""
-    row = (
+    row: tuple[Any, ...] = (
         str(uuid.uuid4()),
         trace_id,
         org_id,
@@ -118,34 +114,27 @@ def _insert_eval_row(
     _ch().insert("evaluations", [row], column_names=_EVAL_COLUMNS)
 
 
-@celery_app.task(name="evaluate_trace", bind=True, max_retries=3, default_retry_delay=10)
-def evaluate_trace(self, trace_id: str, org_id: str, project_id: str) -> None:  # type: ignore[no-untyped-def]
-    """Score one trace with every registered evaluator. v0.2 has one: Judge."""
-    content = _fetch_trace_content(trace_id, project_id)
-    if content is None:
-        # The trace doesn't exist for this project. Don't retry (it won't help)
-        # and don't write an eval row (would be orphan). Just log it.
-        log.warning(
-            "eval.trace_missing", trace_id=trace_id, project_id=project_id
-        )
-        return
-    prompt, completion = content
+# ---------------------------------------------------------------------------
+# Per-evaluator runners. Each handles its own exceptions and writes its own
+# row. None of them raise — the parent task always completes cleanly so Celery
+# never retries and never duplicates rows.
+# ---------------------------------------------------------------------------
 
+def _run_judge(
+    trace_id: str, org_id: str, project_id: str, prompt: str, completion: str
+) -> None:
     t0 = time.perf_counter()
     try:
         result = judge.evaluate(prompt, completion)
-    except Exception as exc:  # noqa: BLE001 — record + let Celery retry
-        log.exception(
-            "eval.judge_unhandled", trace_id=trace_id, error=str(exc)
-        )
+    except Exception as exc:  # noqa: BLE001
+        log.exception("eval.judge_unhandled", trace_id=trace_id, error=str(exc))
         _insert_eval_row(
             trace_id=trace_id, org_id=org_id, project_id=project_id,
-            evaluator="judge", scores={}, reasoning="",
-            judge_model="", latency_ms=int((time.perf_counter() - t0) * 1000),
+            evaluator="judge", scores={}, reasoning="", judge_model="",
+            latency_ms=int((time.perf_counter() - t0) * 1000),
             cost_usd=0.0, status="error", error=repr(exc)[:500],
         )
-        # Re-raise to mark the task failed; Celery's retry policy handles it.
-        raise
+        return
 
     latency_ms = int((time.perf_counter() - t0) * 1000)
     status = "ok" if result.runs_succeeded > 0 else "error"
@@ -154,30 +143,72 @@ def evaluate_trace(self, trace_id: str, org_id: str, project_id: str) -> None:  
         if result.runs_succeeded > 0
         else f"all {result.runs_attempted} judge runs failed to parse"
     )
-    # Cost is server-side from the catalog: free for Groq, real $ when v0.3
-    # swaps to a paid judge. Token counts aren't tracked per attempt today; we
-    # estimate cost = 0 for Groq, which is exact. Real token accounting comes
-    # with LiteLLM integration in v0.2-late.
     judge_cost = compute_cost_usd(result.judge_model, 0, 0)
 
     _insert_eval_row(
-        trace_id=trace_id,
-        org_id=org_id,
-        project_id=project_id,
-        evaluator="judge",
-        scores=result.scores,
-        reasoning=result.reasoning,
-        judge_model=result.judge_model,
-        latency_ms=latency_ms,
-        cost_usd=judge_cost,
-        status=status,
-        error=error_text,
+        trace_id=trace_id, org_id=org_id, project_id=project_id,
+        evaluator="judge", scores=result.scores, reasoning=result.reasoning,
+        judge_model=result.judge_model, latency_ms=latency_ms,
+        cost_usd=judge_cost, status=status, error=error_text,
     )
     log.info(
         "eval.written",
-        trace_id=trace_id,
-        project_id=project_id,
-        evaluator="judge",
-        runs=f"{result.runs_succeeded}/{result.runs_attempted}",
-        scores=result.scores,
+        trace_id=trace_id, project_id=project_id, evaluator="judge",
+        runs=f"{result.runs_succeeded}/{result.runs_attempted}", scores=result.scores,
     )
+
+
+def _run_pii(
+    trace_id: str, org_id: str, project_id: str, prompt: str, completion: str
+) -> None:
+    t0 = time.perf_counter()
+    try:
+        result = pii.evaluate(prompt, completion)
+    except Exception as exc:  # noqa: BLE001
+        log.exception("eval.pii_unhandled", trace_id=trace_id, error=str(exc))
+        _insert_eval_row(
+            trace_id=trace_id, org_id=org_id, project_id=project_id,
+            evaluator="pii", scores={}, reasoning="", judge_model="",
+            latency_ms=int((time.perf_counter() - t0) * 1000),
+            cost_usd=0.0, status="error", error=repr(exc)[:500],
+        )
+        return
+
+    latency_ms = int((time.perf_counter() - t0) * 1000)
+    reasoning = (
+        f"Detected: {', '.join(result.categories)}"
+        if result.categories
+        else "No PII patterns detected."
+    )
+    _insert_eval_row(
+        trace_id=trace_id, org_id=org_id, project_id=project_id,
+        evaluator="pii", scores={"pii_safety": result.score},
+        reasoning=reasoning, judge_model="",
+        latency_ms=latency_ms, cost_usd=0.0,
+        status="ok", error="",
+    )
+    log.info(
+        "eval.written",
+        trace_id=trace_id, project_id=project_id, evaluator="pii",
+        score=result.score, categories=result.categories,
+    )
+
+
+# ---------------------------------------------------------------------------
+# The task
+# ---------------------------------------------------------------------------
+
+@celery_app.task(name="evaluate_trace")
+def evaluate_trace(trace_id: str, org_id: str, project_id: str) -> None:
+    """Score one trace with every registered evaluator."""
+    content = _fetch_trace_content(trace_id, project_id)
+    if content is None:
+        log.warning(
+            "eval.trace_missing", trace_id=trace_id, project_id=project_id
+        )
+        return
+    prompt, completion = content
+
+    # Each evaluator is independent: one failure doesn't skip the others.
+    _run_judge(trace_id, org_id, project_id, prompt, completion)
+    _run_pii(trace_id, org_id, project_id, prompt, completion)

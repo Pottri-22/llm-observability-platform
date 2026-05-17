@@ -45,14 +45,21 @@ class Settings(BaseSettings):
     trace_batch_size: int = 100
     trace_batch_flush_ms: int = 500
 
-    # LLM-as-Judge (v0.2 eval engine). Defaults point at Groq's free tier so
-    # the eval engine stays $0 during the sprint. v0.3 swaps to LiteLLM and
-    # supports paid providers without touching this code.
-    judge_model: str = "llama-3.3-70b-versatile"
-    judge_base_url: str = "https://api.groq.com/openai/v1"
-    groq_api_key: str = ""  # populated from the worker container's env
+    # LLM-as-Judge (v0.2 eval engine). The judge call goes through LiteLLM, so
+    # `judge_model` is a LiteLLM provider-prefixed string ("groq/...",
+    # "openai/...", "anthropic/...", "ollama/..."). Switching providers is a
+    # config change — no code edit. Default stays on Groq's free tier so the
+    # eval engine costs $0 during the sprint.
+    judge_model: str = "groq/llama-3.3-70b-versatile"
     judge_timeout_s: float = 15.0  # per attempt; one judge call should be ~1-3s
     judge_runs: int = 3  # G-Eval median-of-N stabilization; README §6.4 spec
+
+    # Provider API keys. LiteLLM reads these from the env at call time; we mirror
+    # them here so app.config is the single source of truth and tests can inject.
+    # Worker containers receive whichever are set in the host .env (see compose).
+    groq_api_key: str = ""
+    openai_api_key: str = ""
+    anthropic_api_key: str = ""
 
 
 @lru_cache(maxsize=1)

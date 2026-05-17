@@ -19,13 +19,12 @@ import json
 import logging
 import re
 import statistics
-import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from openai import OpenAI
-
 from app.config import settings
+from app.services.llm_service import CompletionResult, chat_completion
 
 log = logging.getLogger(__name__)
 
@@ -171,60 +170,59 @@ def median_scores(runs: list[dict[str, Any]]) -> dict[str, float] | None:
 
 
 # ---------------------------------------------------------------------------
-# Driver — calls the LLM, collects N runs, returns the medianed result
+# Driver — calls the LLM via the provider-agnostic llm_service, collects N
+# runs, returns the medianed result.
 # ---------------------------------------------------------------------------
 
-def _judge_client() -> OpenAI:
-    """Build the OpenAI-compatible client pointed at the configured judge
-    provider. Worker is a long-lived process, but we keep this a function so
-    test scaffolds can monkey-patch easily."""
-    return OpenAI(
-        api_key=settings.groq_api_key,
-        base_url=settings.judge_base_url,
-        timeout=settings.judge_timeout_s,
-    )
+# Function type for the injected LLM call — same shape as
+# `llm_service.chat_completion`, so tests can drop in a stub.
+CompletionFn = Callable[..., CompletionResult]
 
 
 def evaluate(
     trace_prompt: str,
     trace_completion: str,
     *,
-    client: OpenAI | None = None,
+    completion_fn: CompletionFn | None = None,
 ) -> JudgeResult:
     """Run the judge `settings.judge_runs` times and return medianed scores.
 
-    `client` is injectable so tests can pass a stub. In normal worker use it
-    defaults to a real OpenAI-compatible client pointed at Groq.
+    `completion_fn` is injectable so tests can pass a fake without touching the
+    network. Production callers (the Celery task) pass nothing and the default
+    `llm_service.chat_completion` is used, dispatching to whichever provider
+    `settings.judge_model` names (`groq/...`, `openai/...`, `anthropic/...`).
     """
     rubric = build_judge_prompt(trace_prompt, trace_completion)
-    llm = client or _judge_client()
-    model = settings.judge_model
+    fn = completion_fn or chat_completion
+    model = settings.judge_model  # already provider-prefixed (LiteLLM convention)
     runs_attempted = settings.judge_runs
     parsed_runs: list[dict[str, Any]] = []
 
     for i in range(runs_attempted):
-        t0 = time.perf_counter()
         try:
-            resp = llm.chat.completions.create(
+            result = fn(
                 model=model,
                 messages=[{"role": "user", "content": rubric}],
                 # Low (not zero) temperature: we *want* a little judge diversity
                 # so median-of-N stabilizes; zero would just give 3 identical runs.
                 temperature=0.2,
                 max_tokens=300,
+                timeout=settings.judge_timeout_s,
             )
-            content = resp.choices[0].message.content or ""
         except Exception as exc:  # noqa: BLE001 — log and continue with remaining runs
             log.warning(
                 "judge.call_failed", extra={"attempt": i + 1, "error": repr(exc)}
             )
             continue
-        elapsed_ms = (time.perf_counter() - t0) * 1000.0
-        parsed = parse_judge_output(content)
+        parsed = parse_judge_output(result.text)
         if parsed is None:
             log.warning(
                 "judge.parse_failed",
-                extra={"attempt": i + 1, "elapsed_ms": elapsed_ms, "raw_head": content[:120]},
+                extra={
+                    "attempt": i + 1,
+                    "elapsed_ms": result.latency_ms,
+                    "raw_head": result.text[:120],
+                },
             )
             continue
         parsed_runs.append(parsed)
@@ -240,5 +238,7 @@ def evaluate(
         reasoning=reasoning,
         runs_succeeded=len(parsed_runs),
         runs_attempted=runs_attempted,
-        judge_model=f"groq/{model}" if "groq" in settings.judge_base_url else model,
+        # `model` is already the LiteLLM-prefixed form (`groq/...`), which is
+        # exactly the key cost.py looks up. No translation needed.
+        judge_model=model,
     )
